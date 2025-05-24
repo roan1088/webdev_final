@@ -3,16 +3,31 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 
-import { db } from '../firebase'
+import { db, auth, google } from '../firebase'
 import { addDoc, collection, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import { signInWithPopup, signOut } from 'firebase/auth'
 
 function App() {
   const [count, setCount] = useState(0)
   const [doc, setDoc] = useState(null)
+  const [user, setUser] = useState(null)
+
+  const handleAuthClick = () => {
+    if (user) {
+      signOut(auth).then(setUser(null)).catch(console.error)
+    } else {
+      signInWithPopup(auth, google).then((result) => setUser(result.user)).catch(console.error)
+    }
+  }
 
   useEffect(() => {
+    if (!user) {
+      setDoc(null)
+      return
+    }
+
     const loadCollection = async () => {
-      const q = query(collection(db, 'test'), where("uid", "==", "1234"))
+      const q = query(collection(db, 'test'), where("uid", "==", user.uid))
       const snap = await getDocs(q);
 
       if (snap.empty) {
@@ -20,28 +35,29 @@ function App() {
       } else {
         const firstDoc = snap.docs[0]
         // console.log(firstDoc)
-        setDoc(firstDoc)
+        setDoc(firstDoc.ref)
         setCount(firstDoc.data().count)
       }
     }
 
     loadCollection()
-  }, [])
+  }, [user])
 
   useEffect(() => {
-    if (count == 0) {
+    if (count == 0 || !user) {
       return
     }
 
     console.log("count changed to " + count)
     if (!doc) {
       const newDoc = addDoc(collection(db, "test"), {
-        uid: "1234",
+        uid: user.uid,
         count
-      })
-      setDoc(newDoc)
+      }).then(newDoc => setDoc(newDoc))
+      // console.log(newDoc)
+      // setDoc(newDoc)
     } else {
-      const result = updateDoc(doc.ref, {count})
+      const result = updateDoc(doc, {count})
     }
   }, [count])
 
@@ -55,6 +71,9 @@ function App() {
         <p>
           Click on the button to increment count
         </p>
+        <button onClick={handleAuthClick}>
+          {user ? "Sign out" : "Sign in"}
+        </button>
       </div>
     </>
   )
